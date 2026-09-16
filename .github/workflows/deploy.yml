@@ -1,0 +1,73 @@
+name: CI/CD - Build & Deploy to Google Cloud Run
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  SERVICE_NAME: project-hub
+  REGION: us-central1
+
+jobs:
+  test:
+    name: Lint & Build Verification
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Build Application
+        run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: 1
+          NODE_ENV: production
+
+  deploy:
+    name: Deploy to Google Cloud Run
+    needs: test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write # Required for Workload Identity Federation
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        # Supports either Service Account Key (GCP_SA_KEY) or Workload Identity Federation (GCP_WIF_PROVIDER)
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Deploy to Cloud Run
+        id: deploy
+        run: |
+          gcloud run deploy ${{ env.SERVICE_NAME }} \
+            --source . \
+            --region ${{ env.REGION }} \
+            --project ${{ secrets.GCP_PROJECT_ID }} \
+            --allow-unauthenticated \
+            --set-env-vars GOOGLE_CLOUD_PROJECT=${{ secrets.GCP_PROJECT_ID }},AGENT_API_KEY=${{ secrets.AGENT_API_KEY }},NEXTAUTH_SECRET=${{ secrets.NEXTAUTH_SECRET }},SLACK_WEBHOOK_URL=${{ secrets.SLACK_WEBHOOK_URL }}
+
+      - name: Show Cloud Run Service URL
+        run: |
+          echo "🚀 Deployed successfully to Cloud Run!"
+          gcloud run services describe ${{ env.SERVICE_NAME }} --region ${{ env.REGION }} --project ${{ secrets.GCP_PROJECT_ID }} --format 'value(status.url)'
