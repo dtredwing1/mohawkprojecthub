@@ -195,6 +195,46 @@ export async function updateProject(id: string, updates: Partial<Project>): Prom
   return store.projects[index];
 }
 
+export async function deleteProject(id: string): Promise<boolean> {
+  const projects = await getProjects();
+  if (projects.length <= 1) {
+    throw new Error('Cannot delete the last remaining project workspace.');
+  }
+
+  const db = getFirestore();
+  if (db) {
+    try {
+      await db.collection('projects').doc(id).delete();
+      await db.collection('settings').doc(`strategy-${id}`).delete();
+
+      const collections = ['items', 'decisions', 'deliverables', 'activity'];
+      for (const collName of collections) {
+        const snapshot = await db.collection(collName).where('projectId', '==', id).get();
+        if (!snapshot.empty) {
+          const batch = db.batch();
+          snapshot.docs.forEach(doc => batch.delete(doc.ref));
+          await batch.commit();
+        }
+      }
+    } catch (e) {
+      console.warn('Firestore delete failed for project', e);
+    }
+  }
+
+  const store = getLocalStore();
+  store.projects = store.projects.filter(p => p.id !== id);
+  if (store.strategies && store.strategies[id]) {
+    delete store.strategies[id];
+  }
+  store.openItems = store.openItems.filter(i => i.projectId !== id);
+  store.adrs = store.adrs.filter(d => d.projectId !== id);
+  store.deliverables = store.deliverables.filter(d => d.projectId !== id);
+  store.activities = store.activities.filter(a => a.projectId !== id);
+  scheduleSaveLocalStore(store);
+
+  return true;
+}
+
 // ==========================================
 // Strategy Store
 // ==========================================

@@ -18,6 +18,7 @@ import {
   FolderPlus,
   Check,
   Briefcase,
+  Trash2,
 } from 'lucide-react';
 
 const navItems = [
@@ -32,9 +33,19 @@ const navItems = [
 
 export function Navigation() {
   const pathname = usePathname();
-  const { projects, activeProject, switchProject } = useProject();
+  const { projects, activeProject, switchProject, deleteProject } = useProject();
   const { openModal } = useModals();
   const [dropdownOpen, setDropdownOpen] = useState(false);
+
+  const handleDeleteProject = async (p: { id: string; name: string }, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (window.confirm(`Are you sure you want to delete workspace "${p.name}"?\n\nThis will permanently remove its open items, strategy canvas, and architecture decisions.`)) {
+      const res = await deleteProject(p.id);
+      if (!res.success) {
+        alert(res.error || 'Failed to delete workspace');
+      }
+    }
+  };
 
   return (
     <aside className="w-64 bg-slate-900 border-r border-slate-800 flex flex-col justify-between shrink-0 select-none min-h-screen">
@@ -77,20 +88,23 @@ export function Navigation() {
               <div className="max-h-48 overflow-y-auto space-y-0.5">
                 {projects.map((p) => {
                   const isCurrent = p.id === activeProject?.id;
+                  const isProtected = p.id === 'proj-mohawk' || projects.length <= 1;
                   return (
-                    <button
+                    <div
                       key={p.id}
-                      onClick={() => {
-                        switchProject(p.id);
-                        setDropdownOpen(false);
-                      }}
-                      className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition-colors text-left cursor-pointer ${
+                      className={`w-full group/proj flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition-colors ${
                         isCurrent
                           ? 'bg-sky-500/20 text-sky-300 font-medium'
-                          : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                          : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'
                       }`}
                     >
-                      <div className="flex items-center gap-2 truncate">
+                      <button
+                        onClick={() => {
+                          switchProject(p.id);
+                          setDropdownOpen(false);
+                        }}
+                        className="flex items-center gap-2 truncate flex-1 text-left cursor-pointer mr-1"
+                      >
                         <span
                           className="w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold text-white shrink-0"
                           style={{ backgroundColor: p.accentColor || '#0284c7' }}
@@ -98,9 +112,21 @@ export function Navigation() {
                           {p.key}
                         </span>
                         <span className="truncate">{p.name}</span>
+                      </button>
+
+                      <div className="flex items-center gap-1 shrink-0">
+                        {isCurrent && <Check className="w-3.5 h-3.5 text-sky-400 shrink-0" />}
+                        {!isProtected && (
+                          <button
+                            onClick={(e) => handleDeleteProject(p, e)}
+                            className="p-1 rounded text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 opacity-0 group-hover/proj:opacity-100 transition-all cursor-pointer"
+                            title={`Delete "${p.name}" workspace`}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                       </div>
-                      {isCurrent && <Check className="w-3.5 h-3.5 text-sky-400 shrink-0" />}
-                    </button>
+                    </div>
                   );
                 })}
               </div>

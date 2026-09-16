@@ -9,6 +9,7 @@ interface ProjectContextType {
   activeProjectId: string;
   loading: boolean;
   switchProject: (id: string) => void;
+  deleteProject: (id: string) => Promise<{ success: boolean; error?: string }>;
   refreshProjects: () => Promise<void>;
 }
 
@@ -18,6 +19,7 @@ const ProjectContext = createContext<ProjectContextType>({
   activeProjectId: 'proj-mohawk',
   loading: true,
   switchProject: () => {},
+  deleteProject: async () => ({ success: false }),
   refreshProjects: async () => {},
 });
 
@@ -59,6 +61,31 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const deleteProject = async (id: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const res = await fetch(`/api/projects/${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok) {
+        return { success: false, error: data.error || 'Failed to delete workspace' };
+      }
+
+      const remaining = projects.filter((p) => p.id !== id);
+      setProjects(remaining);
+
+      if (activeProjectId === id && remaining.length > 0) {
+        switchProject(remaining[0].id);
+      }
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('hub:refresh'));
+      }
+
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Network error' };
+    }
+  };
+
   const activeProject = projects.find(p => p.id === activeProjectId) || projects[0] || null;
 
   return (
@@ -69,6 +96,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
         activeProjectId,
         loading,
         switchProject,
+        deleteProject,
         refreshProjects: fetchProjects,
       }}
     >

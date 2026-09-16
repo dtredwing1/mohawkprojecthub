@@ -1,6 +1,8 @@
 'use client';
 
 import { useState } from 'react';
+import { useProject } from '@/components/ProjectContext';
+import { useModals } from '@/components/ModalContext';
 import {
   Settings,
   Cloud,
@@ -13,9 +15,14 @@ import {
   Terminal,
   ShieldCheck,
   ExternalLink,
+  Briefcase,
+  Trash2,
+  FolderPlus,
 } from 'lucide-react';
 
 export default function SettingsPage() {
+  const { projects, activeProjectId, switchProject, deleteProject } = useProject();
+  const { openModal } = useModals();
   const [copiedKey, setCopiedKey] = useState(false);
   const [copiedCurl, setCopiedCurl] = useState<string | null>(null);
   const [slackTesting, setSlackTesting] = useState(false);
@@ -90,6 +97,98 @@ export default function SettingsPage() {
         <p className="text-sm text-slate-400 mt-1">
           Infrastructure configurations, GCP Free Tier deployment status, and REST API access for Agentic AI partners.
         </p>
+      </div>
+
+      {/* Project Workspaces Management */}
+      <div className="p-6 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 rounded-lg bg-amber-500/10 text-amber-400">
+              <Briefcase className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-base font-semibold text-white">Project Workspaces</h3>
+              <p className="text-xs text-slate-400">
+                Manage, switch, or permanently clean up project environments.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => openModal('new-project')}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-amber-500/10 text-amber-300 border border-amber-500/20 hover:bg-amber-500/20 transition-all cursor-pointer"
+          >
+            <FolderPlus className="w-3.5 h-3.5" />
+            <span>+ Create New Project</span>
+          </button>
+        </div>
+
+        <div className="divide-y divide-slate-800/60 rounded-xl border border-slate-800 bg-slate-950/60 overflow-hidden">
+          {projects.map((p) => {
+            const isProtected = p.id === 'proj-mohawk' || projects.length <= 1;
+            const isActive = p.id === activeProjectId;
+            return (
+              <div key={p.id} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <span
+                    className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold text-white shrink-0 shadow-sm"
+                    style={{ backgroundColor: p.accentColor || '#0284c7' }}
+                  >
+                    {p.key}
+                  </span>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-semibold text-white truncate">{p.name}</span>
+                      {isActive && (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-sky-500/10 text-sky-400 border border-sky-500/20 font-mono">
+                          Active
+                        </span>
+                      )}
+                      {p.id === 'proj-mohawk' && (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 font-mono">
+                          Primary Default
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-slate-400 truncate max-w-lg mt-0.5">
+                      {p.description || 'No description provided.'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+                  {!isActive && (
+                    <button
+                      onClick={() => switchProject(p.id)}
+                      className="px-3 py-1.5 rounded-lg text-xs font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 transition-colors cursor-pointer"
+                    >
+                      Switch To
+                    </button>
+                  )}
+                  {!isProtected && (
+                    <button
+                      onClick={async () => {
+                        if (
+                          window.confirm(
+                            `Are you sure you want to delete workspace "${p.name}"?\n\nThis will permanently remove its open items, strategy canvas, and architecture decisions.`
+                          )
+                        ) {
+                          const res = await deleteProject(p.id);
+                          if (!res.success) {
+                            alert(res.error || 'Failed to delete workspace');
+                          }
+                        }
+                      }}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-rose-400 hover:text-rose-300 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 transition-colors cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Delete</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {/* Cloud & Free Tier Status */}
