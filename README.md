@@ -8,6 +8,7 @@ Designed to align your team on **strategy, brand identity, open items (backlog),
 
 ## 🏛 Architecture & Tech Stack
 
+- **Live Production URL**: [https://hub.themottfamily.net](https://hub.themottfamily.net) *(Cloud Run: `https://project-hub-357738328075.us-central1.run.app`)*
 - **Framework**: [Next.js](https://nextjs.org/) (App Router, React 19, TypeScript, Tailwind CSS v4)
 - **Deployment**: [Google Cloud Run](https://cloud.google.com/run) (containerized standalone, scale-to-zero, 2M free requests/mo)
 - **Database**: [Google Cloud Firestore](https://cloud.google.com/firestore) Native Mode (1GB storage, 50k reads / 20k writes daily free tier) with automatic local JSON fallback for rapid offline development
