@@ -65,7 +65,7 @@ jobs:
             --region ${{ env.REGION }} \
             --project ${{ secrets.GCP_PROJECT_ID }} \
             --allow-unauthenticated \
-            --set-env-vars GOOGLE_CLOUD_PROJECT=${{ secrets.GCP_PROJECT_ID }},AGENT_API_KEY=${{ secrets.AGENT_API_KEY }},NEXTAUTH_SECRET=${{ secrets.NEXTAUTH_SECRET }},SLACK_WEBHOOK_URL=${{ secrets.SLACK_WEBHOOK_URL }}
+            --set-env-vars GOOGLE_CLOUD_PROJECT=${{ secrets.GCP_PROJECT_ID }},GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }},GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }},NEXTAUTH_URL=https://hub.themottfamily.net,NEXTAUTH_SECRET=${{ secrets.NEXTAUTH_SECRET || 'hub-prod-jwt-secret-key-32-chars-long-secure' }},SLACK_WEBHOOK_URL=${{ secrets.SLACK_WEBHOOK_URL }},AGENT_API_KEY=${{ secrets.AGENT_API_KEY }}
 
       - name: Show Cloud Run Service URL
         run: |

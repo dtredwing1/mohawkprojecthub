@@ -6,6 +6,9 @@ import {
   StrategyDoc,
   Deliverable,
   ActivityEvent,
+  UserProfile,
+  CollaboratorInvite,
+  UserRole,
 } from './types';
 import {
   initialProjects,
@@ -30,6 +33,8 @@ interface DatabaseStore {
   openItems: OpenItem[];
   deliverables: Deliverable[];
   activities: ActivityEvent[];
+  users: UserProfile[];
+  invites: CollaboratorInvite[];
 }
 
 // In-memory fallback
@@ -45,6 +50,8 @@ function getLocalStore(): DatabaseStore {
       const data = fs.readFileSync(LOCAL_STORAGE_FILE, 'utf-8');
       const parsed = JSON.parse(data);
       if (parsed.projects && Array.isArray(parsed.projects)) {
+        if (!parsed.users) parsed.users = [];
+        if (!parsed.invites) parsed.invites = [];
         memoryStore = parsed;
         return memoryStore!;
       }
@@ -62,6 +69,8 @@ function getLocalStore(): DatabaseStore {
     openItems: initialOpenItems,
     deliverables: initialDeliverables,
     activities: initialActivities,
+    users: [],
+    invites: [],
   };
 
   scheduleSaveLocalStore(memoryStore);
@@ -195,10 +204,47 @@ export async function updateProject(id: string, updates: Partial<Project>): Prom
   return store.projects[index];
 }
 
+export async function setDefaultProject(id: string): Promise<Project> {
+  const projects = await getProjects();
+  const target = projects.find(p => p.id === id);
+  if (!target) throw new Error('Project not found');
+
+  const now = new Date().toISOString();
+  const db = getFirestore();
+  if (db) {
+    try {
+      const snapshot = await db.collection('projects').get();
+      const batch = db.batch();
+      snapshot.docs.forEach(doc => {
+        batch.update(doc.ref, {
+          isDefault: doc.id === id,
+          updatedAt: now,
+        });
+      });
+      await batch.commit();
+    } catch (e) {
+      console.warn('Firestore setDefaultProject failed', e);
+    }
+  }
+
+  const store = getLocalStore();
+  store.projects.forEach(p => {
+    p.isDefault = p.id === id;
+  });
+  scheduleSaveLocalStore(store);
+
+  return { ...target, isDefault: true, updatedAt: now };
+}
+
 export async function deleteProject(id: string): Promise<boolean> {
   const projects = await getProjects();
   if (projects.length <= 1) {
     throw new Error('Cannot delete the last remaining project workspace.');
+  }
+
+  const target = projects.find(p => p.id === id);
+  if (target?.isDefault) {
+    throw new Error('Cannot delete the active default workspace. Promote another workspace to default first.');
   }
 
   const db = getFirestore();
@@ -648,3 +694,179 @@ export async function logActivity(event: Omit<ActivityEvent, 'id' | 'timestamp'>
   scheduleSaveLocalStore(store);
   return newEvent;
 }
+
+// ==========================================
+// Users & Collaborator RBAC Store
+// ==========================================
+export async function getUsers(): Promise<UserProfile[]> {
+  const db = getFirestore();
+  if (db) {
+    try {
+      const snapshot = await db.collection('users').get();
+      if (!snapshot.empty) {
+        return snapshot.docs.map(d => ({ id: d.id, ...d.data() } as UserProfile));
+      }
+    } catch (e) {
+      console.warn('Firestore read failed for users, using fallback', e);
+    }
+  }
+  return getLocalStore().users || [];
+}
+
+export async function getUser(emailOrId: string): Promise<UserProfile | null> {
+  const normalized = emailOrId.toLowerCase().trim();
+  const users = await getUsers();
+  return users.find(u => u.email.toLowerCase() === normalized || u.id === emailOrId) || null;
+}
+
+export async function upsertUser(data: Partial<UserProfile> & { email: string }): Promise<UserProfile> {
+  const normalizedEmail = data.email.toLowerCase().trim();
+  const existing = await getUser(normalizedEmail);
+  const now = new Date().toISOString();
+
+  const allUsers = await getUsers();
+  const isFirstUserEver = allUsers.length === 0;
+  const isExplicitAdmin = (process.env.ADMIN_EMAIL || '').toLowerCase().trim() === normalizedEmail;
+
+  // Root admin bootstrapping: first user or configured admin email becomes 'admin'
+  let role: UserRole = data.role || existing?.role || (isFirstUserEver || isExplicitAdmin ? 'admin' : 'member');
+  let assignedProjectIds = data.assignedProjectIds || existing?.assignedProjectIds || (role === 'admin' ? ['*'] : ['proj-mohawk']);
+
+  // Check if invited
+  const invites = await getCollaboratorInvites();
+  const matchingInvite = invites.find(i => i.email.toLowerCase() === normalizedEmail);
+  if (matchingInvite) {
+    role = matchingInvite.role;
+    assignedProjectIds = matchingInvite.assignedProjectIds;
+  }
+
+  const id = existing?.id || data.id || `usr-${normalizedEmail.replace(/[^a-z0-9]/g, '')}`;
+
+  const updatedUser: UserProfile = {
+    id,
+    email: normalizedEmail,
+    name: data.name || existing?.name || normalizedEmail.split('@')[0],
+    image: data.image || existing?.image,
+    role,
+    assignedProjectIds,
+    defaultProjectId: data.defaultProjectId || existing?.defaultProjectId,
+    status: 'active',
+    createdAt: existing?.createdAt || now,
+    updatedAt: now,
+    lastLoginAt: now,
+  };
+
+  const db = getFirestore();
+  if (db) {
+    try {
+      await db.collection('users').doc(id).set(updatedUser, { merge: true });
+    } catch (e) {
+      console.warn('Firestore write failed for user', e);
+    }
+  }
+
+  const store = getLocalStore();
+  if (!store.users) store.users = [];
+  const idx = store.users.findIndex(u => u.email.toLowerCase() === normalizedEmail || u.id === id);
+  if (idx >= 0) {
+    store.users[idx] = updatedUser;
+  } else {
+    store.users.push(updatedUser);
+  }
+  scheduleSaveLocalStore(store);
+
+  return updatedUser;
+}
+
+export async function getCollaboratorInvites(): Promise<CollaboratorInvite[]> {
+  const db = getFirestore();
+  if (db) {
+    try {
+      const snapshot = await db.collection('invites').get();
+      if (!snapshot.empty) {
+        return snapshot.docs.map(d => ({ email: d.id, ...d.data() } as CollaboratorInvite));
+      }
+    } catch (e) {
+      console.warn('Firestore read failed for invites', e);
+    }
+  }
+  return getLocalStore().invites || [];
+}
+
+export async function inviteCollaborator(invite: CollaboratorInvite): Promise<CollaboratorInvite> {
+  const normalizedEmail = invite.email.toLowerCase().trim();
+  const cleanInvite: CollaboratorInvite = {
+    ...invite,
+    email: normalizedEmail,
+    invitedAt: new Date().toISOString(),
+  };
+
+  const db = getFirestore();
+  if (db) {
+    try {
+      await db.collection('invites').doc(normalizedEmail).set(cleanInvite);
+    } catch (e) {
+      console.warn('Firestore invite save failed', e);
+    }
+  }
+
+  const store = getLocalStore();
+  if (!store.invites) store.invites = [];
+  const idx = store.invites.findIndex(i => i.email.toLowerCase() === normalizedEmail);
+  if (idx >= 0) {
+    store.invites[idx] = cleanInvite;
+  } else {
+    store.invites.push(cleanInvite);
+  }
+  scheduleSaveLocalStore(store);
+
+  // If user already registered, update their assigned projects & role
+  const existingUser = await getUser(normalizedEmail);
+  if (existingUser) {
+    await upsertUser({
+      ...existingUser,
+      role: cleanInvite.role,
+      assignedProjectIds: cleanInvite.assignedProjectIds,
+    });
+  }
+
+  return cleanInvite;
+}
+
+export async function deleteCollaborator(email: string): Promise<boolean> {
+  const normalizedEmail = email.toLowerCase().trim();
+  const db = getFirestore();
+  if (db) {
+    try {
+      await db.collection('invites').doc(normalizedEmail).delete();
+      const userSnap = await db.collection('users').where('email', '==', normalizedEmail).get();
+      const batch = db.batch();
+      userSnap.docs.forEach(doc => batch.delete(doc.ref));
+      await batch.commit();
+    } catch (e) {
+      console.warn('Firestore delete invite failed', e);
+    }
+  }
+
+  const store = getLocalStore();
+  if (store.invites) {
+    store.invites = store.invites.filter(i => i.email.toLowerCase() !== normalizedEmail);
+  }
+  if (store.users) {
+    store.users = store.users.filter(u => u.email.toLowerCase() !== normalizedEmail);
+  }
+  scheduleSaveLocalStore(store);
+  return true;
+}
+
+export async function setUserDefaultProject(email: string, projectId: string): Promise<UserProfile | null> {
+  const normalized = email.toLowerCase().trim();
+  const user = await getUser(normalized);
+  if (!user) return null;
+
+  return upsertUser({
+    ...user,
+    defaultProjectId: projectId,
+  });
+}
+

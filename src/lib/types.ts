@@ -7,6 +7,31 @@ export interface Project {
   updatedAt: string;
   status: 'active' | 'archived';
   accentColor?: string;
+  isDefault?: boolean;
+}
+
+export type UserRole = 'admin' | 'member' | 'viewer';
+
+export interface UserProfile {
+  id: string; // Google OAuth sub or normalized email
+  email: string;
+  name: string;
+  image?: string;
+  role: UserRole;
+  assignedProjectIds: string[]; // e.g. ['proj-alpha'] or ['*'] for admin
+  defaultProjectId?: string;
+  status: 'active' | 'invited' | 'disabled';
+  createdAt: string;
+  updatedAt: string;
+  lastLoginAt?: string;
+}
+
+export interface CollaboratorInvite {
+  email: string;
+  role: UserRole;
+  assignedProjectIds: string[];
+  invitedBy: string;
+  invitedAt: string;
 }
 
 export type Priority = 'low' | 'medium' | 'high' | 'urgent';

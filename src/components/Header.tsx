@@ -1,5 +1,8 @@
 'use client';
 
+import { useState } from 'react';
+import { useSession, signOut } from 'next-auth/react';
+import Link from 'next/link';
 import { useModals } from './ModalContext';
 import { useProject } from './ProjectContext';
 import {
@@ -9,11 +12,27 @@ import {
   FolderGit2,
   Search,
   Briefcase,
+  LogOut,
+  Settings,
+  Shield,
+  User as UserIcon,
 } from 'lucide-react';
 
 export function Header() {
+  const { data: session } = useSession();
   const { openModal } = useModals();
   const { activeProject } = useProject();
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+
+  const user = session?.user as any;
+  const isAdmin = user?.role === 'admin';
+  const displayName = user?.name || user?.email?.split('@')[0] || 'Team Member';
+  const initials = displayName
+    .split(' ')
+    .map((n: string) => n[0])
+    .join('')
+    .substring(0, 2)
+    .toUpperCase();
 
   return (
     <header className="h-16 border-b border-slate-800 bg-slate-900/60 backdrop-blur-md px-6 flex items-center justify-between sticky top-0 z-30">
@@ -29,18 +48,20 @@ export function Header() {
         </div>
       </div>
 
-      {/* Action Buttons & Integration Indicators */}
+      {/* Action Buttons & User Profile */}
       <div className="flex items-center gap-3">
         {/* Quick Action Menus */}
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => openModal('new-project')}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-amber-500/10 text-amber-300 border border-amber-500/20 hover:bg-amber-500/20 transition-all cursor-pointer"
-            title="Create a new blank project"
-          >
-            <FolderPlus className="w-3.5 h-3.5" />
-            <span>+ Project</span>
-          </button>
+          {isAdmin && (
+            <button
+              onClick={() => openModal('new-project')}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-amber-500/10 text-amber-300 border border-amber-500/20 hover:bg-amber-500/20 transition-all cursor-pointer"
+              title="Create a new blank project"
+            >
+              <FolderPlus className="w-3.5 h-3.5" />
+              <span>+ Project</span>
+            </button>
+          )}
 
           <button
             onClick={() => openModal('new-item')}
@@ -74,15 +95,71 @@ export function Header() {
           <Briefcase className="w-3.5 h-3.5 text-sky-400" />
           <span className="text-slate-400 text-[11px]">Workspace:</span>
           <span className="text-white font-medium text-[11px] truncate max-w-[120px]">
-            {activeProject?.name || 'Mohawk'}
+            {activeProject?.name || 'Workspace'}
           </span>
         </div>
 
-        {/* User profile avatar */}
-        <div className="flex items-center gap-2 pl-1">
-          <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-sky-400 to-indigo-500 flex items-center justify-center text-white text-xs font-bold border border-slate-700 shadow-sm">
-            TM
-          </div>
+        {/* User profile avatar & menu */}
+        <div className="relative pl-1">
+          <button
+            onClick={() => setUserMenuOpen(!userMenuOpen)}
+            className="flex items-center gap-2 p-1 rounded-full hover:ring-2 hover:ring-sky-500/40 transition-all cursor-pointer"
+            title={`${displayName} (${isAdmin ? 'Admin' : 'Collaborator'})`}
+          >
+            {user?.image ? (
+              <img
+                src={user.image}
+                alt={displayName}
+                className="w-8 h-8 rounded-full border border-slate-700 object-cover shadow-sm"
+              />
+            ) : (
+              <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-sky-400 to-indigo-500 flex items-center justify-center text-white text-xs font-bold border border-slate-700 shadow-sm">
+                {initials || 'TM'}
+              </div>
+            )}
+          </button>
+
+          {/* User Profile Dropdown */}
+          {userMenuOpen && (
+            <div className="absolute right-0 top-12 z-50 w-64 bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl p-3 space-y-2 animate-in fade-in zoom-in-95 duration-100">
+              <div className="p-2 border-b border-slate-800 space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-white truncate max-w-[140px]">
+                    {displayName}
+                  </span>
+                  <span
+                    className={`text-[9px] font-mono px-2 py-0.5 rounded-full uppercase font-medium ${
+                      isAdmin
+                        ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
+                        : 'bg-sky-500/15 text-sky-300 border border-sky-500/30'
+                    }`}
+                  >
+                    {isAdmin ? 'Admin' : 'Member'}
+                  </span>
+                </div>
+                <div className="text-[11px] text-slate-400 truncate">{user?.email || 'Authenticated'}</div>
+              </div>
+
+              <div className="space-y-1 pt-1">
+                <Link
+                  href="/settings"
+                  onClick={() => setUserMenuOpen(false)}
+                  className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs text-slate-300 hover:text-white hover:bg-slate-800/80 transition-colors"
+                >
+                  <Settings className="w-4 h-4 text-slate-400" />
+                  <span>{isAdmin ? 'Workspace & Admin Settings' : 'My Preferences'}</span>
+                </Link>
+
+                <button
+                  onClick={() => signOut({ callbackUrl: '/auth/signin' })}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs text-rose-400 hover:bg-rose-500/10 transition-colors text-left cursor-pointer"
+                >
+                  <LogOut className="w-4 h-4" />
+                  <span>Sign Out</span>
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </header>

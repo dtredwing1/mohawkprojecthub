@@ -1,5 +1,6 @@
 'use client';
 
+import { usePathname } from 'next/navigation';
 import { ModalProvider } from './ModalContext';
 import { ProjectProvider } from './ProjectContext';
 import { Navigation } from './Navigation';
@@ -10,6 +11,13 @@ import { LinkDriveModal } from './LinkDriveModal';
 import { NewProjectModal } from './NewProjectModal';
 
 export function ClientShell({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  const isAuthPage = pathname?.startsWith('/auth');
+
+  if (isAuthPage) {
+    return <main className="min-h-screen bg-slate-950 text-slate-100">{children}</main>;
+  }
+
   return (
     <ProjectProvider>
       <ModalProvider>

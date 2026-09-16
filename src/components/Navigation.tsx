@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import { useProject } from './ProjectContext';
 import { useModals } from './ModalContext';
 import {
@@ -19,6 +20,7 @@ import {
   Check,
   Briefcase,
   Trash2,
+  Star,
 } from 'lucide-react';
 
 const navItems = [
@@ -33,9 +35,13 @@ const navItems = [
 
 export function Navigation() {
   const pathname = usePathname();
-  const { projects, activeProject, switchProject, deleteProject } = useProject();
+  const { data: session } = useSession();
+  const { projects, activeProject, switchProject, deleteProject, setUserDefaultPreference } = useProject();
   const { openModal } = useModals();
   const [dropdownOpen, setDropdownOpen] = useState(false);
+
+  const user = session?.user as any;
+  const isAdmin = user?.role === 'admin';
 
   const handleDeleteProject = async (p: { id: string; name: string }, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -88,7 +94,9 @@ export function Navigation() {
               <div className="max-h-48 overflow-y-auto space-y-0.5">
                 {projects.map((p) => {
                   const isCurrent = p.id === activeProject?.id;
-                  const isProtected = p.id === 'proj-mohawk' || projects.length <= 1;
+                  const isUserDefault = user?.defaultProjectId === p.id || (!user?.defaultProjectId && p.isDefault);
+                  const canDelete = isAdmin && !p.isDefault && projects.length > 1;
+
                   return (
                     <div
                       key={p.id}
@@ -115,8 +123,25 @@ export function Navigation() {
                       </button>
 
                       <div className="flex items-center gap-1 shrink-0">
+                        {/* Default Star Preference */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setUserDefaultPreference(p.id);
+                          }}
+                          className={`p-1 rounded transition-all cursor-pointer ${
+                            isUserDefault
+                              ? 'text-amber-400'
+                              : 'text-slate-600 hover:text-amber-400 opacity-0 group-hover/proj:opacity-100'
+                          }`}
+                          title={isUserDefault ? 'Your default workspace' : 'Set as my default workspace'}
+                        >
+                          <Star className={`w-3 h-3 ${isUserDefault ? 'fill-amber-400' : ''}`} />
+                        </button>
+
                         {isCurrent && <Check className="w-3.5 h-3.5 text-sky-400 shrink-0" />}
-                        {!isProtected && (
+
+                        {canDelete && (
                           <button
                             onClick={(e) => handleDeleteProject(p, e)}
                             className="p-1 rounded text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 opacity-0 group-hover/proj:opacity-100 transition-all cursor-pointer"
@@ -131,18 +156,20 @@ export function Navigation() {
                 })}
               </div>
 
-              <div className="pt-1.5 border-t border-slate-800">
-                <button
-                  onClick={() => {
-                    setDropdownOpen(false);
-                    openModal('new-project');
-                  }}
-                  className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs text-sky-400 hover:bg-sky-500/10 font-medium transition-colors cursor-pointer"
-                >
-                  <FolderPlus className="w-3.5 h-3.5" />
-                  <span>+ Create New Project</span>
-                </button>
-              </div>
+              {isAdmin && (
+                <div className="pt-1.5 border-t border-slate-800">
+                  <button
+                    onClick={() => {
+                      setDropdownOpen(false);
+                      openModal('new-project');
+                    }}
+                    className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs text-sky-400 hover:bg-sky-500/10 font-medium transition-colors cursor-pointer"
+                  >
+                    <FolderPlus className="w-3.5 h-3.5" />
+                    <span>+ Create New Project</span>
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
