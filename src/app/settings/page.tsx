@@ -18,6 +18,26 @@ import {
 export default function SettingsPage() {
   const [copiedKey, setCopiedKey] = useState(false);
   const [copiedCurl, setCopiedCurl] = useState<string | null>(null);
+  const [slackTesting, setSlackTesting] = useState(false);
+  const [slackStatus, setSlackStatus] = useState<{ success?: boolean; message?: string } | null>(null);
+
+  const testSlack = async () => {
+    setSlackTesting(true);
+    setSlackStatus(null);
+    try {
+      const res = await fetch('/api/slack/test', { method: 'POST' });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setSlackStatus({ success: true, message: 'Test message delivered to Slack successfully!' });
+      } else {
+        setSlackStatus({ success: false, message: data.error || 'Failed to send test message.' });
+      }
+    } catch (e: any) {
+      setSlackStatus({ success: false, message: e.message || 'Network error' });
+    } finally {
+      setSlackTesting(false);
+    }
+  };
 
   const sampleApiKey = 'hub-agent-dev-key-12345';
 
@@ -179,24 +199,47 @@ export default function SettingsPage() {
 
         {/* Slack Webhook */}
         <div className="p-6 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-4">
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-lg bg-sky-500/10 text-sky-400">
-              <MessageSquare className="w-5 h-5" />
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 rounded-lg bg-sky-500/10 text-sky-400">
+                <MessageSquare className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-white">Slack Bi-Directional Webhooks</h3>
+                <span className="text-xs text-slate-400">Instant Team Notifications</span>
+              </div>
             </div>
-            <div>
-              <h3 className="text-sm font-semibold text-white">Slack Bi-Directional Webhooks</h3>
-              <span className="text-xs text-slate-400">Instant Team Notifications</span>
-            </div>
+            <button
+              onClick={testSlack}
+              disabled={slackTesting}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-sky-500/10 text-sky-400 border border-sky-500/20 hover:bg-sky-500/20 transition-all cursor-pointer disabled:opacity-50"
+            >
+              <MessageSquare className="w-3.5 h-3.5" />
+              <span>{slackTesting ? 'Sending...' : 'Send Test Ping to Slack'}</span>
+            </button>
           </div>
 
           <p className="text-xs text-slate-400 leading-relaxed">
             Dispatches rich Block Kit notifications to your Slack channel when open items are assigned or completed, ADRs are recorded, or AI agents submit deliverables.
           </p>
 
+          {slackStatus && (
+            <div
+              className={`p-3 rounded-xl border text-xs flex items-center gap-2 ${
+                slackStatus.success
+                  ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300'
+                  : 'bg-rose-500/10 border-rose-500/20 text-rose-300'
+              }`}
+            >
+              <span>{slackStatus.success ? '✅' : '⚠️'}</span>
+              <span>{slackStatus.message}</span>
+            </div>
+          )}
+
           <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-1 text-xs">
-            <span className="text-slate-400 font-mono text-[10px]">Setup Instruction:</span>
+            <span className="text-slate-400 font-mono text-[10px]">Active Status:</span>
             <p className="text-slate-300">
-              Set <code className="text-sky-400 font-mono">SLACK_WEBHOOK_URL</code> in your environment to start receiving live dispatches in #project-pulse.
+              Webhook mapped via <code className="text-sky-400 font-mono">SLACK_WEBHOOK_URL</code> secret. Click <strong>Send Test Ping to Slack</strong> above to verify instant delivery.
             </p>
           </div>
         </div>

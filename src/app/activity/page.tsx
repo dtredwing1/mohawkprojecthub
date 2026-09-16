@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { ActivityEvent } from '@/lib/types';
 import { useProject } from '@/components/ProjectContext';
 import {
@@ -108,7 +109,12 @@ export default function ActivityPage() {
             </span>
           </div>
         </div>
-        <span className="text-emerald-400 font-mono text-[11px] shrink-0">Synced to #project-pulse</span>
+        <Link
+          href="/settings"
+          className="text-emerald-400 hover:text-emerald-300 font-mono text-[11px] shrink-0 border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 rounded-md transition-colors"
+        >
+          Live Slack Channel Connected →
+        </Link>
       </div>
 
       {/* Filter and Search Bar */}
