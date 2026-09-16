@@ -45,7 +45,7 @@ export function NewItemModal({ onCreated }: { onCreated?: () => void }) {
         setDescription('');
         closeModal();
         if (onCreated) onCreated();
-        window.location.reload();
+        window.dispatchEvent(new CustomEvent('hub:refresh'));
       }
     } catch (err) {
       console.error('Failed to create item', err);

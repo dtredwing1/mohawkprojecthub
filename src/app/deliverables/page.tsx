@@ -49,6 +49,9 @@ export default function DeliverablesPage() {
 
   useEffect(() => {
     fetchDeliverables();
+    const handleRefresh = () => fetchDeliverables();
+    window.addEventListener('hub:refresh', handleRefresh);
+    return () => window.removeEventListener('hub:refresh', handleRefresh);
   }, [activeProjectId]);
 
   const handleDelete = async (id: string) => {

@@ -47,6 +47,9 @@ export default function OpenItemsPage() {
 
   useEffect(() => {
     fetchItems();
+    const handleRefresh = () => fetchItems();
+    window.addEventListener('hub:refresh', handleRefresh);
+    return () => window.removeEventListener('hub:refresh', handleRefresh);
   }, [activeProjectId]);
 
   const handleStatusToggle = async (item: OpenItem) => {

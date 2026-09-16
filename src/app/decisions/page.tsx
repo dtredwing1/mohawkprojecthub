@@ -51,6 +51,9 @@ export default function DecisionsPage() {
 
   useEffect(() => {
     fetchADRs();
+    const handleRefresh = () => fetchADRs();
+    window.addEventListener('hub:refresh', handleRefresh);
+    return () => window.removeEventListener('hub:refresh', handleRefresh);
   }, [activeProjectId]);
 
   const handleStatusChange = async (adr: ADR, newStatus: ADRStatus) => {

@@ -34,19 +34,28 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const { title, description, priority = 'medium', owner = 'AI Agent', dueDate, tags = [] } = body;
+    const projectId =
+      body.projectId ||
+      req.headers.get('x-project-id') ||
+      req.nextUrl.searchParams.get('projectId') ||
+      'proj-mohawk';
 
-    if (!title) {
-      return NextResponse.json({ error: 'Title is required' }, { status: 400 });
+    if (!title || typeof title !== 'string') {
+      return NextResponse.json({ error: 'Title is required and must be a string' }, { status: 400 });
     }
 
+    const validPriorities = ['low', 'medium', 'high', 'urgent'];
+    const sanitizedPriority = validPriorities.includes(priority) ? priority : 'medium';
+
     const item = await createOpenItem({
-      title,
-      description: description || '',
+      projectId,
+      title: title.trim(),
+      description: typeof description === 'string' ? description.trim() : '',
       status: 'todo',
-      priority,
-      owner,
+      priority: sanitizedPriority as any,
+      owner: typeof owner === 'string' ? owner.trim() : 'AI Agent',
       dueDate: dueDate || new Date(Date.now() + 86400000 * 7).toISOString().split('T')[0],
-      tags,
+      tags: Array.isArray(tags) ? tags.map(t => String(t).trim()).filter(Boolean) : [],
     });
 
     await logActivity({

@@ -51,7 +51,7 @@ export function NewADRModal({ onCreated }: { onCreated?: () => void }) {
         setAlternatives('');
         closeModal();
         if (onCreated) onCreated();
-        window.location.reload();
+        window.dispatchEvent(new CustomEvent('hub:refresh'));
       }
     } catch (err) {
       console.error('Failed to create ADR', err);

@@ -34,6 +34,8 @@ interface DatabaseStore {
 
 // In-memory fallback
 let memoryStore: DatabaseStore | null = null;
+let isSaving = false;
+let pendingSave = false;
 
 function getLocalStore(): DatabaseStore {
   if (memoryStore) return memoryStore;
@@ -62,11 +64,17 @@ function getLocalStore(): DatabaseStore {
     activities: initialActivities,
   };
 
-  saveLocalStore(memoryStore);
+  scheduleSaveLocalStore(memoryStore);
   return memoryStore;
 }
 
-function saveLocalStore(store: DatabaseStore) {
+function scheduleSaveLocalStore(store: DatabaseStore) {
+  if (isSaving) {
+    pendingSave = true;
+    return;
+  }
+
+  isSaving = true;
   try {
     if (!fs.existsSync(LOCAL_STORAGE_DIR)) {
       fs.mkdirSync(LOCAL_STORAGE_DIR, { recursive: true });
@@ -74,6 +82,12 @@ function saveLocalStore(store: DatabaseStore) {
     fs.writeFileSync(LOCAL_STORAGE_FILE, JSON.stringify(store, null, 2), 'utf-8');
   } catch (err) {
     console.warn('Could not persist local store to disk:', err);
+  } finally {
+    isSaving = false;
+    if (pendingSave) {
+      pendingSave = false;
+      scheduleSaveLocalStore(store);
+    }
   }
 }
 
@@ -104,9 +118,10 @@ export async function getProjects(): Promise<Project[]> {
   const db = getFirestore();
   if (db) {
     try {
-      const snapshot = await db.collection('projects').orderBy('createdAt', 'desc').get();
+      const snapshot = await db.collection('projects').get();
       if (!snapshot.empty) {
-        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Project));
+        const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Project));
+        return list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
       }
       for (const p of initialProjects) {
         await db.collection('projects').doc(p.id).set(p);
@@ -144,7 +159,6 @@ export async function createProject(project: {
   if (db) {
     try {
       await db.collection('projects').doc(id).set(newProject);
-      // Initialize blank strategy for new project
       const blankStrategy = createBlankStrategy(id, project.name);
       await db.collection('settings').doc(`strategy-${id}`).set(blankStrategy);
     } catch (e) {
@@ -156,7 +170,7 @@ export async function createProject(project: {
   store.projects.unshift(newProject);
   if (!store.strategies) store.strategies = {};
   store.strategies[id] = createBlankStrategy(id, project.name);
-  saveLocalStore(store);
+  scheduleSaveLocalStore(store);
 
   return newProject;
 }
@@ -177,7 +191,7 @@ export async function updateProject(id: string, updates: Partial<Project>): Prom
   const index = store.projects.findIndex(p => p.id === id);
   if (index === -1) return null;
   store.projects[index] = { ...store.projects[index], ...updates, updatedAt: now };
-  saveLocalStore(store);
+  scheduleSaveLocalStore(store);
   return store.projects[index];
 }
 
@@ -204,7 +218,7 @@ export async function getStrategy(projectId = 'proj-mohawk'): Promise<StrategyDo
   if (!store.strategies) store.strategies = {};
   if (!store.strategies[projectId]) {
     store.strategies[projectId] = projectId === 'proj-mohawk' ? initialStrategy : createBlankStrategy(projectId);
-    saveLocalStore(store);
+    scheduleSaveLocalStore(store);
   }
   return store.strategies[projectId];
 }
@@ -231,25 +245,31 @@ export async function updateStrategy(updated: Partial<StrategyDoc>, projectId = 
   const store = getLocalStore();
   if (!store.strategies) store.strategies = {};
   store.strategies[projectId] = merged;
-  saveLocalStore(store);
+  scheduleSaveLocalStore(store);
   return merged;
 }
 
 // ==========================================
-// Open Items Store
+// Open Items Store (Composite-Index Safe)
 // ==========================================
 export async function getOpenItems(projectId?: string): Promise<OpenItem[]> {
   const db = getFirestore();
   if (db) {
     try {
-      let query = db.collection('openItems').orderBy('createdAt', 'desc');
+      let snapshot;
       if (projectId) {
-        query = query.where('projectId', '==', projectId) as any;
+        // Query by single field to avoid composite index requirement in Firestore
+        snapshot = await db.collection('openItems').where('projectId', '==', projectId).get();
+      } else {
+        snapshot = await db.collection('openItems').get();
       }
-      const snapshot = await query.get();
+
       if (!snapshot.empty) {
-        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as OpenItem));
+        const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as OpenItem));
+        // In-memory sort by createdAt descending
+        return items.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
       }
+
       if (!projectId || projectId === 'proj-mohawk') {
         for (const item of initialOpenItems) {
           await db.collection('openItems').doc(item.id).set(item);
@@ -263,10 +283,10 @@ export async function getOpenItems(projectId?: string): Promise<OpenItem[]> {
   }
 
   const allItems = getLocalStore().openItems;
-  if (projectId) {
-    return allItems.filter(i => (i.projectId || 'proj-mohawk') === projectId);
-  }
-  return allItems;
+  const filtered = projectId
+    ? allItems.filter(i => (i.projectId || 'proj-mohawk') === projectId)
+    : allItems;
+  return filtered.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 }
 
 export async function createOpenItem(item: Omit<OpenItem, 'id' | 'createdAt' | 'updatedAt'>): Promise<OpenItem> {
@@ -292,7 +312,7 @@ export async function createOpenItem(item: Omit<OpenItem, 'id' | 'createdAt' | '
 
   const store = getLocalStore();
   store.openItems.unshift(newItem);
-  saveLocalStore(store);
+  scheduleSaveLocalStore(store);
   return newItem;
 }
 
@@ -321,7 +341,7 @@ export async function updateOpenItem(id: string, updates: Partial<OpenItem>): Pr
     ...updates,
     updatedAt: now,
   };
-  saveLocalStore(store);
+  scheduleSaveLocalStore(store);
   return store.openItems[index];
 }
 
@@ -337,25 +357,29 @@ export async function deleteOpenItem(id: string): Promise<boolean> {
 
   const store = getLocalStore();
   store.openItems = store.openItems.filter(i => i.id !== id);
-  saveLocalStore(store);
+  scheduleSaveLocalStore(store);
   return true;
 }
 
 // ==========================================
-// ADRs Store
+// ADRs Store (Composite-Index Safe)
 // ==========================================
 export async function getADRs(projectId?: string): Promise<ADR[]> {
   const db = getFirestore();
   if (db) {
     try {
-      let query = db.collection('adrs').orderBy('number', 'desc');
+      let snapshot;
       if (projectId) {
-        query = query.where('projectId', '==', projectId) as any;
+        snapshot = await db.collection('adrs').where('projectId', '==', projectId).get();
+      } else {
+        snapshot = await db.collection('adrs').get();
       }
-      const snapshot = await query.get();
+
       if (!snapshot.empty) {
-        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ADR));
+        const adrs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ADR));
+        return adrs.sort((a, b) => (b.number || 0) - (a.number || 0));
       }
+
       if (!projectId || projectId === 'proj-mohawk') {
         for (const adr of initialADRs) {
           await db.collection('adrs').doc(adr.id).set(adr);
@@ -369,10 +393,10 @@ export async function getADRs(projectId?: string): Promise<ADR[]> {
   }
 
   const allADRs = getLocalStore().adrs;
-  if (projectId) {
-    return allADRs.filter(a => (a.projectId || 'proj-mohawk') === projectId);
-  }
-  return allADRs;
+  const filtered = projectId
+    ? allADRs.filter(a => (a.projectId || 'proj-mohawk') === projectId)
+    : allADRs;
+  return filtered.sort((a, b) => (b.number || 0) - (a.number || 0));
 }
 
 export async function createADR(adr: Omit<ADR, 'id' | 'number' | 'createdAt' | 'updatedAt'>): Promise<ADR> {
@@ -402,7 +426,7 @@ export async function createADR(adr: Omit<ADR, 'id' | 'number' | 'createdAt' | '
 
   const store = getLocalStore();
   store.adrs.unshift(newADR);
-  saveLocalStore(store);
+  scheduleSaveLocalStore(store);
   return newADR;
 }
 
@@ -431,25 +455,29 @@ export async function updateADR(id: string, updates: Partial<ADR>): Promise<ADR 
     ...updates,
     updatedAt: now,
   };
-  saveLocalStore(store);
+  scheduleSaveLocalStore(store);
   return store.adrs[index];
 }
 
 // ==========================================
-// Deliverables Store
+// Deliverables Store (Composite-Index Safe)
 // ==========================================
 export async function getDeliverables(projectId?: string): Promise<Deliverable[]> {
   const db = getFirestore();
   if (db) {
     try {
-      let query = db.collection('deliverables').orderBy('createdAt', 'desc');
+      let snapshot;
       if (projectId) {
-        query = query.where('projectId', '==', projectId) as any;
+        snapshot = await db.collection('deliverables').where('projectId', '==', projectId).get();
+      } else {
+        snapshot = await db.collection('deliverables').get();
       }
-      const snapshot = await query.get();
+
       if (!snapshot.empty) {
-        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Deliverable));
+        const delivs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Deliverable));
+        return delivs.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
       }
+
       if (!projectId || projectId === 'proj-mohawk') {
         for (const del of initialDeliverables) {
           await db.collection('deliverables').doc(del.id).set(del);
@@ -463,10 +491,10 @@ export async function getDeliverables(projectId?: string): Promise<Deliverable[]
   }
 
   const allDel = getLocalStore().deliverables;
-  if (projectId) {
-    return allDel.filter(d => (d.projectId || 'proj-mohawk') === projectId);
-  }
-  return allDel;
+  const filtered = projectId
+    ? allDel.filter(d => (d.projectId || 'proj-mohawk') === projectId)
+    : allDel;
+  return filtered.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 }
 
 export async function createDeliverable(del: Omit<Deliverable, 'id' | 'createdAt' | 'updatedAt'>): Promise<Deliverable> {
@@ -492,7 +520,7 @@ export async function createDeliverable(del: Omit<Deliverable, 'id' | 'createdAt
 
   const store = getLocalStore();
   store.deliverables.unshift(newDel);
-  saveLocalStore(store);
+  scheduleSaveLocalStore(store);
   return newDel;
 }
 
@@ -508,25 +536,30 @@ export async function deleteDeliverable(id: string): Promise<boolean> {
 
   const store = getLocalStore();
   store.deliverables = store.deliverables.filter(d => d.id !== id);
-  saveLocalStore(store);
+  scheduleSaveLocalStore(store);
   return true;
 }
 
 // ==========================================
-// Activity Log Store
+// Activity Log Store (Composite-Index Safe)
 // ==========================================
 export async function getActivities(projectId?: string, limit = 50): Promise<ActivityEvent[]> {
   const db = getFirestore();
   if (db) {
     try {
-      let query = db.collection('activities').orderBy('timestamp', 'desc');
+      let snapshot;
       if (projectId) {
-        query = query.where('projectId', '==', projectId) as any;
+        snapshot = await db.collection('activities').where('projectId', '==', projectId).get();
+      } else {
+        snapshot = await db.collection('activities').get();
       }
-      const snapshot = await query.limit(limit).get();
+
       if (!snapshot.empty) {
-        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ActivityEvent));
+        const events = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ActivityEvent));
+        const sorted = events.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+        return sorted.slice(0, limit);
       }
+
       if (!projectId || projectId === 'proj-mohawk') {
         for (const act of initialActivities) {
           await db.collection('activities').doc(act.id).set(act);
@@ -543,7 +576,9 @@ export async function getActivities(projectId?: string, limit = 50): Promise<Act
   const filtered = projectId
     ? allActs.filter(a => (a.projectId || 'proj-mohawk') === projectId)
     : allActs;
-  return filtered.slice(0, limit);
+  return filtered
+    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+    .slice(0, limit);
 }
 
 export async function logActivity(event: Omit<ActivityEvent, 'id' | 'timestamp'>): Promise<ActivityEvent> {
@@ -570,6 +605,6 @@ export async function logActivity(event: Omit<ActivityEvent, 'id' | 'timestamp'>
   if (store.activities.length > 200) {
     store.activities = store.activities.slice(0, 200);
   }
-  saveLocalStore(store);
+  scheduleSaveLocalStore(store);
   return newEvent;
 }
