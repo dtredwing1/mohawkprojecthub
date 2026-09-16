@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getADRs, createADR, logActivity } from '@/lib/storage';
 import { sendSlackNotification } from '@/lib/slack';
 
-export async function GET() {
-  const adrs = await getADRs();
+export async function GET(req: NextRequest) {
+  const projectId = req.nextUrl.searchParams.get('projectId') || undefined;
+  const adrs = await getADRs(projectId);
   return NextResponse.json(adrs);
 }
 
@@ -13,6 +14,7 @@ export async function POST(req: NextRequest) {
     const adr = await createADR(body);
 
     await logActivity({
+      projectId: adr.projectId,
       actor: { name: body.author || 'Team Lead', type: 'user' },
       action: 'Created Architecture Decision Record',
       details: `ADR #${adr.number}: "${adr.title}" [Status: ${adr.status}]`,

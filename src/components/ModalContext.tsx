@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState } from 'react';
 
-type ModalType = 'new-item' | 'new-adr' | 'link-drive' | null;
+type ModalType = 'new-item' | 'new-adr' | 'link-drive' | 'new-project' | null;
 
 interface ModalContextType {
   activeModal: ModalType;

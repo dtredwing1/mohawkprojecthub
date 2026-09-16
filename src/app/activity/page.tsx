@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { ActivityEvent } from '@/lib/types';
+import { useProject } from '@/components/ProjectContext';
 import {
   Bot,
   User,
@@ -17,6 +18,7 @@ import {
 } from 'lucide-react';
 
 export default function ActivityPage() {
+  const { activeProject, activeProjectId } = useProject();
   const [activities, setActivities] = useState<ActivityEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [actorFilter, setActorFilter] = useState<string>('all');
@@ -24,10 +26,11 @@ export default function ActivityPage() {
 
   const fetchActivities = () => {
     setLoading(true);
-    fetch('/api/activity')
+    const pid = activeProjectId || 'proj-mohawk';
+    fetch(`/api/activity?projectId=${pid}`)
       .then((res) => res.json())
       .then((data) => {
-        setActivities(data);
+        setActivities(data || []);
         setLoading(false);
       })
       .catch((err) => {
@@ -38,7 +41,7 @@ export default function ActivityPage() {
 
   useEffect(() => {
     fetchActivities();
-  }, []);
+  }, [activeProjectId]);
 
   const filtered = activities.filter((act) => {
     if (actorFilter === 'agent' && act.actor.type !== 'agent') return false;

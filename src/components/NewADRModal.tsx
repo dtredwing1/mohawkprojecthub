@@ -2,11 +2,13 @@
 
 import { useState } from 'react';
 import { useModals } from './ModalContext';
+import { useProject } from './ProjectContext';
 import { X, FileCode2, Loader2 } from 'lucide-react';
 import { ADRStatus, ADRSubsystem } from '@/lib/types';
 
 export function NewADRModal({ onCreated }: { onCreated?: () => void }) {
   const { activeModal, closeModal } = useModals();
+  const { activeProjectId } = useProject();
   const [title, setTitle] = useState('');
   const [subsystem, setSubsystem] = useState<ADRSubsystem>('devops');
   const [status, setStatus] = useState<ADRStatus>('accepted');
@@ -29,6 +31,7 @@ export function NewADRModal({ onCreated }: { onCreated?: () => void }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          projectId: activeProjectId || 'proj-mohawk',
           title,
           subsystem,
           status,

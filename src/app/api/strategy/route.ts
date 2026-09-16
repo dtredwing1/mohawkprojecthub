@@ -2,17 +2,20 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getStrategy, updateStrategy, logActivity } from '@/lib/storage';
 import { sendSlackNotification } from '@/lib/slack';
 
-export async function GET() {
-  const strategy = await getStrategy();
+export async function GET(req: NextRequest) {
+  const projectId = req.nextUrl.searchParams.get('projectId') || 'proj-mohawk';
+  const strategy = await getStrategy(projectId);
   return NextResponse.json(strategy);
 }
 
 export async function PUT(req: NextRequest) {
   try {
+    const projectId = req.nextUrl.searchParams.get('projectId') || 'proj-mohawk';
     const body = await req.json();
-    const updated = await updateStrategy(body);
+    const updated = await updateStrategy(body, projectId);
 
     await logActivity({
+      projectId,
       actor: { name: body.updatedBy || 'Team Lead', type: 'user' },
       action: 'Updated Strategy & Brand Canvas',
       details: 'Modified strategic pillars or brand guidelines.',

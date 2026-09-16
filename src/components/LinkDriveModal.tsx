@@ -2,12 +2,14 @@
 
 import { useState } from 'react';
 import { useModals } from './ModalContext';
+import { useProject } from './ProjectContext';
 import { X, FolderGit2, Loader2, Sparkles } from 'lucide-react';
 import { DeliverableType } from '@/lib/types';
 import { parseGoogleDriveUrl } from '@/lib/gdrive-client';
 
 export function LinkDriveModal({ onCreated }: { onCreated?: () => void }) {
   const { activeModal, closeModal } = useModals();
+  const { activeProjectId } = useProject();
   const [title, setTitle] = useState('');
   const [summary, setSummary] = useState('');
   const [driveUrl, setDriveUrl] = useState('');
@@ -40,6 +42,7 @@ export function LinkDriveModal({ onCreated }: { onCreated?: () => void }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          projectId: activeProjectId || 'proj-mohawk',
           title,
           summary,
           type,

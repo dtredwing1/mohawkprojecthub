@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDeliverables, createDeliverable, logActivity } from '@/lib/storage';
 import { sendSlackNotification } from '@/lib/slack';
 
-export async function GET() {
-  const deliverables = await getDeliverables();
+export async function GET(req: NextRequest) {
+  const projectId = req.nextUrl.searchParams.get('projectId') || undefined;
+  const deliverables = await getDeliverables(projectId);
   return NextResponse.json(deliverables);
 }
 
@@ -16,6 +17,7 @@ export async function POST(req: NextRequest) {
     });
 
     await logActivity({
+      projectId: deliverable.projectId,
       actor: { name: body.author || 'Team Member', type: body.authorType || 'user' },
       action: 'Linked Deliverable Asset',
       details: `Added "${deliverable.title}" [${deliverable.type}]`,

@@ -1,7 +1,60 @@
-import { StrategyDoc, ADR, OpenItem, Deliverable, ActivityEvent } from './types';
+import { Project, StrategyDoc, ADR, OpenItem, Deliverable, ActivityEvent } from './types';
+
+export const initialProjects: Project[] = [
+  {
+    id: 'proj-mohawk',
+    name: 'Mohawk Project Hub',
+    key: 'MHK',
+    description: 'Primary strategic hub for cross-functional collaboration, Google Drive assets, and Agentic AI execution.',
+    createdAt: new Date(Date.now() - 86400000 * 7).toISOString(),
+    updatedAt: new Date().toISOString(),
+    status: 'active',
+    accentColor: '#0284c7', // Sky
+  },
+  {
+    id: 'proj-brand',
+    name: 'Brand Refresh & Design System',
+    key: 'BND',
+    description: 'Initiative to modernize brand guidelines, vector logo assets, and shared presentation templates.',
+    createdAt: new Date(Date.now() - 86400000 * 3).toISOString(),
+    updatedAt: new Date().toISOString(),
+    status: 'active',
+    accentColor: '#10b981', // Emerald
+  },
+];
+
+export function createBlankStrategy(projectId: string, projectName = 'New Project'): StrategyDoc {
+  return {
+    id: `strategy-${projectId}`,
+    projectId,
+    mission: `Define the core mission and strategic direction for ${projectName}.`,
+    vision: `Outline the long-term vision, target market, and value proposition for ${projectName}.`,
+    targetAudience: 'Early adopters, core customers, and internal stakeholders.',
+    pillars: [
+      {
+        id: `pillar-${Date.now()}-1`,
+        title: 'Core Milestone 1',
+        description: 'Define key deliverables and architectural goals.',
+        metrics: '100% completion of foundational specs.',
+        targetDate: 'Q4 2026',
+      },
+    ],
+    brandGuidelines: {
+      primaryColor: '#0284c7',
+      secondaryColor: '#4f46e5',
+      accentColor: '#10b981',
+      fontFamily: 'Inter / Plus Jakarta Sans',
+      toneOfVoice: 'Clear, modern, and execution-oriented.',
+      driveBrandKitUrl: '',
+    },
+    brandAssets: [],
+    updatedAt: new Date().toISOString(),
+  };
+}
 
 export const initialStrategy: StrategyDoc = {
-  id: 'current-strategy',
+  id: 'strategy-proj-mohawk',
+  projectId: 'proj-mohawk',
   mission: 'Empower small cross-functional teams and autonomous AI agents to ship cohesive, high-impact products with zero friction.',
   vision: 'A unified collaboration cockpit where human strategic intent seamlessly orchestrates agentic AI execution and Google Drive deliverables.',
   targetAudience: 'High-leverage agile startup teams, product innovators, and AI-augmented technical leaders.',
@@ -29,9 +82,9 @@ export const initialStrategy: StrategyDoc = {
     },
   ],
   brandGuidelines: {
-    primaryColor: '#0284c7', // Sky-600
-    secondaryColor: '#4f46e5', // Indigo-600
-    accentColor: '#10b981', // Emerald-500
+    primaryColor: '#0284c7',
+    secondaryColor: '#4f46e5',
+    accentColor: '#10b981',
     fontFamily: 'Inter / Plus Jakarta Sans',
     toneOfVoice: 'Decisive, modern, transparent, and execution-oriented.',
     driveBrandKitUrl: 'https://drive.google.com/',
@@ -58,6 +111,7 @@ export const initialStrategy: StrategyDoc = {
 export const initialADRs: ADR[] = [
   {
     id: 'adr-001',
+    projectId: 'proj-mohawk',
     number: 1,
     title: 'Deploy Collaboration Hub on Google Cloud Run with Serverless Firestore',
     status: 'accepted',
@@ -72,6 +126,7 @@ export const initialADRs: ADR[] = [
   },
   {
     id: 'adr-002',
+    projectId: 'proj-mohawk',
     number: 2,
     title: 'Hybrid Google Drive Integration Model',
     status: 'accepted',
@@ -86,6 +141,7 @@ export const initialADRs: ADR[] = [
   },
   {
     id: 'adr-003',
+    projectId: 'proj-mohawk',
     number: 3,
     title: 'Bi-directional Slack Webhooks and Secured Agent REST API',
     status: 'accepted',
@@ -103,6 +159,7 @@ export const initialADRs: ADR[] = [
 export const initialOpenItems: OpenItem[] = [
   {
     id: 'item-1',
+    projectId: 'proj-mohawk',
     title: 'Configure Google Cloud Run service and map custom domain',
     description: 'Create Cloud Run service in us-central1, configure environment variables, and map DNS record.',
     status: 'in-progress',
@@ -115,6 +172,7 @@ export const initialOpenItems: OpenItem[] = [
   },
   {
     id: 'item-2',
+    projectId: 'proj-mohawk',
     title: 'Set up Google Cloud Service Account with Drive write permissions',
     description: 'Enable Google Drive API in GCP console, create service account key, and share team Drive folder.',
     status: 'todo',
@@ -127,6 +185,7 @@ export const initialOpenItems: OpenItem[] = [
   },
   {
     id: 'item-3',
+    projectId: 'proj-mohawk',
     title: 'Connect Slack Incoming Webhook for #project-pulse channel',
     description: 'Create incoming webhook URL in Slack App settings and add SLACK_WEBHOOK_URL to environment.',
     status: 'todo',
@@ -139,6 +198,7 @@ export const initialOpenItems: OpenItem[] = [
   },
   {
     id: 'item-4',
+    projectId: 'proj-mohawk',
     title: 'Review Brand Voice & Tone guidelines with Stakeholders',
     description: 'Align team on copy principles and sign off on primary brand palette in Strategy Canvas.',
     status: 'done',
@@ -154,6 +214,7 @@ export const initialOpenItems: OpenItem[] = [
 export const initialDeliverables: Deliverable[] = [
   {
     id: 'del-1',
+    projectId: 'proj-mohawk',
     title: 'Q4 Product Strategy & Architecture Specification',
     summary: 'Executive brief outlining core pillars, system architecture, and Agentic AI collaboration flows.',
     type: 'google-doc',
@@ -168,6 +229,7 @@ export const initialDeliverables: Deliverable[] = [
   },
   {
     id: 'del-2',
+    projectId: 'proj-mohawk',
     title: 'Team Brand Kit & Asset Directory',
     summary: 'Centralized Google Drive folder containing SVG wordmarks, typography guidelines, and social cards.',
     type: 'drive-folder',
@@ -183,6 +245,7 @@ export const initialDeliverables: Deliverable[] = [
 export const initialActivities: ActivityEvent[] = [
   {
     id: 'act-1',
+    projectId: 'proj-mohawk',
     timestamp: new Date(Date.now() - 1000 * 60 * 15).toISOString(),
     actor: { name: 'AI Partner: Overseer', type: 'agent' },
     action: 'Generated Deliverable Spec',
@@ -192,6 +255,7 @@ export const initialActivities: ActivityEvent[] = [
   },
   {
     id: 'act-2',
+    projectId: 'proj-mohawk',
     timestamp: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
     actor: { name: 'DevOps / Lead', type: 'user' },
     action: 'Updated Open Item',
@@ -201,6 +265,7 @@ export const initialActivities: ActivityEvent[] = [
   },
   {
     id: 'act-3',
+    projectId: 'proj-mohawk',
     timestamp: new Date(Date.now() - 1000 * 60 * 180).toISOString(),
     actor: { name: 'Architecture Lead', type: 'user' },
     action: 'Recorded ADR #003',

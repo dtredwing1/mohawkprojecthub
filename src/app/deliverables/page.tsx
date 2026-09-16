@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Deliverable, DeliverableType } from '@/lib/types';
 import { useModals } from '@/components/ModalContext';
+import { useProject } from '@/components/ProjectContext';
 import { parseGoogleDriveUrl } from '@/lib/gdrive-client';
 import {
   FolderGit2,
@@ -24,6 +25,7 @@ import {
 
 export default function DeliverablesPage() {
   const { openModal } = useModals();
+  const { activeProject, activeProjectId } = useProject();
   const [deliverables, setDeliverables] = useState<Deliverable[]>([]);
   const [loading, setLoading] = useState(true);
   const [typeFilter, setTypeFilter] = useState<string>('all');
@@ -31,10 +33,12 @@ export default function DeliverablesPage() {
   const [previewItem, setPreviewItem] = useState<Deliverable | null>(null);
 
   const fetchDeliverables = () => {
-    fetch('/api/deliverables')
+    setLoading(true);
+    const pid = activeProjectId || 'proj-mohawk';
+    fetch(`/api/deliverables?projectId=${pid}`)
       .then((res) => res.json())
       .then((data) => {
-        setDeliverables(data);
+        setDeliverables(data || []);
         setLoading(false);
       })
       .catch((err) => {
@@ -45,7 +49,7 @@ export default function DeliverablesPage() {
 
   useEffect(() => {
     fetchDeliverables();
-  }, []);
+  }, [activeProjectId]);
 
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to remove this deliverable?')) return;

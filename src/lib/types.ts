@@ -1,8 +1,20 @@
+export interface Project {
+  id: string;
+  name: string;
+  key: string; // e.g. "MHK", "CORE", "ALFA"
+  description: string;
+  createdAt: string;
+  updatedAt: string;
+  status: 'active' | 'archived';
+  accentColor?: string;
+}
+
 export type Priority = 'low' | 'medium' | 'high' | 'urgent';
 export type ItemStatus = 'todo' | 'in-progress' | 'blocked' | 'done';
 
 export interface OpenItem {
   id: string;
+  projectId?: string;
   title: string;
   description: string;
   status: ItemStatus;
@@ -19,6 +31,7 @@ export type ADRSubsystem = 'frontend' | 'backend' | 'devops' | 'strategy' | 'bra
 
 export interface ADR {
   id: string;
+  projectId?: string;
   number: number;
   title: string;
   status: ADRStatus;
@@ -50,6 +63,7 @@ export interface BrandAsset {
 
 export interface StrategyDoc {
   id: string;
+  projectId?: string;
   mission: string;
   vision: string;
   targetAudience: string;
@@ -76,6 +90,7 @@ export type DeliverableType =
 
 export interface Deliverable {
   id: string;
+  projectId?: string;
   title: string;
   summary: string;
   type: DeliverableType;
@@ -92,6 +107,7 @@ export interface Deliverable {
 
 export interface ActivityEvent {
   id: string;
+  projectId?: string;
   timestamp: string;
   actor: {
     name: string;

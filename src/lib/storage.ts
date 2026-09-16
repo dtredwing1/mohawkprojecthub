@@ -1,5 +1,6 @@
 import { Firestore } from '@google-cloud/firestore';
 import {
+  Project,
   OpenItem,
   ADR,
   StrategyDoc,
@@ -7,7 +8,9 @@ import {
   ActivityEvent,
 } from './types';
 import {
+  initialProjects,
   initialStrategy,
+  createBlankStrategy,
   initialADRs,
   initialOpenItems,
   initialDeliverables,
@@ -21,7 +24,8 @@ const LOCAL_STORAGE_DIR = path.join(process.cwd(), '.data');
 const LOCAL_STORAGE_FILE = path.join(LOCAL_STORAGE_DIR, 'hub-data.json');
 
 interface DatabaseStore {
-  strategy: StrategyDoc;
+  projects: Project[];
+  strategies: Record<string, StrategyDoc>; // keyed by projectId
   adrs: ADR[];
   openItems: OpenItem[];
   deliverables: Deliverable[];
@@ -37,15 +41,21 @@ function getLocalStore(): DatabaseStore {
   try {
     if (fs.existsSync(LOCAL_STORAGE_FILE)) {
       const data = fs.readFileSync(LOCAL_STORAGE_FILE, 'utf-8');
-      memoryStore = JSON.parse(data);
-      return memoryStore!;
+      const parsed = JSON.parse(data);
+      if (parsed.projects && Array.isArray(parsed.projects)) {
+        memoryStore = parsed;
+        return memoryStore!;
+      }
     }
   } catch (err) {
     console.warn('Could not read local store file, initializing default store.', err);
   }
 
   memoryStore = {
-    strategy: initialStrategy,
+    projects: initialProjects,
+    strategies: {
+      'proj-mohawk': initialStrategy,
+    },
     adrs: initialADRs,
     openItems: initialOpenItems,
     deliverables: initialDeliverables,
@@ -87,37 +97,131 @@ function getFirestore(): Firestore | null {
   return firestoreClient;
 }
 
-// --- Strategy Store ---
-export async function getStrategy(): Promise<StrategyDoc> {
+// ==========================================
+// Projects Store
+// ==========================================
+export async function getProjects(): Promise<Project[]> {
   const db = getFirestore();
   if (db) {
     try {
-      const doc = await db.collection('settings').doc('strategy').get();
+      const snapshot = await db.collection('projects').orderBy('createdAt', 'desc').get();
+      if (!snapshot.empty) {
+        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Project));
+      }
+      for (const p of initialProjects) {
+        await db.collection('projects').doc(p.id).set(p);
+      }
+      return initialProjects;
+    } catch (e) {
+      console.warn('Firestore read failed for projects, using fallback', e);
+    }
+  }
+  return getLocalStore().projects;
+}
+
+export async function getProject(id: string): Promise<Project | null> {
+  const projects = await getProjects();
+  return projects.find(p => p.id === id) || null;
+}
+
+export async function createProject(project: {
+  name: string;
+  key: string;
+  description: string;
+  accentColor?: string;
+}): Promise<Project> {
+  const id = `proj-${project.key.toLowerCase().replace(/[^a-z0-9]/g, '')}-${Date.now().toString(36)}`;
+  const now = new Date().toISOString();
+  const newProject: Project = {
+    ...project,
+    id,
+    createdAt: now,
+    updatedAt: now,
+    status: 'active',
+  };
+
+  const db = getFirestore();
+  if (db) {
+    try {
+      await db.collection('projects').doc(id).set(newProject);
+      // Initialize blank strategy for new project
+      const blankStrategy = createBlankStrategy(id, project.name);
+      await db.collection('settings').doc(`strategy-${id}`).set(blankStrategy);
+    } catch (e) {
+      console.warn('Firestore write failed for project', e);
+    }
+  }
+
+  const store = getLocalStore();
+  store.projects.unshift(newProject);
+  if (!store.strategies) store.strategies = {};
+  store.strategies[id] = createBlankStrategy(id, project.name);
+  saveLocalStore(store);
+
+  return newProject;
+}
+
+export async function updateProject(id: string, updates: Partial<Project>): Promise<Project | null> {
+  const now = new Date().toISOString();
+  const db = getFirestore();
+  if (db) {
+    try {
+      const ref = db.collection('projects').doc(id);
+      await ref.update({ ...updates, updatedAt: now });
+    } catch (e) {
+      console.warn('Firestore update failed for project', e);
+    }
+  }
+
+  const store = getLocalStore();
+  const index = store.projects.findIndex(p => p.id === id);
+  if (index === -1) return null;
+  store.projects[index] = { ...store.projects[index], ...updates, updatedAt: now };
+  saveLocalStore(store);
+  return store.projects[index];
+}
+
+// ==========================================
+// Strategy Store
+// ==========================================
+export async function getStrategy(projectId = 'proj-mohawk'): Promise<StrategyDoc> {
+  const db = getFirestore();
+  if (db) {
+    try {
+      const doc = await db.collection('settings').doc(`strategy-${projectId}`).get();
       if (doc.exists) {
         return doc.data() as StrategyDoc;
       }
-      // Seed if not exists
-      await db.collection('settings').doc('strategy').set(initialStrategy);
-      return initialStrategy;
+      const blank = projectId === 'proj-mohawk' ? initialStrategy : createBlankStrategy(projectId);
+      await db.collection('settings').doc(`strategy-${projectId}`).set(blank);
+      return blank;
     } catch (e) {
       console.warn('Firestore read failed for strategy, using fallback', e);
     }
   }
-  return getLocalStore().strategy;
+
+  const store = getLocalStore();
+  if (!store.strategies) store.strategies = {};
+  if (!store.strategies[projectId]) {
+    store.strategies[projectId] = projectId === 'proj-mohawk' ? initialStrategy : createBlankStrategy(projectId);
+    saveLocalStore(store);
+  }
+  return store.strategies[projectId];
 }
 
-export async function updateStrategy(updated: Partial<StrategyDoc>): Promise<StrategyDoc> {
-  const current = await getStrategy();
+export async function updateStrategy(updated: Partial<StrategyDoc>, projectId = 'proj-mohawk'): Promise<StrategyDoc> {
+  const current = await getStrategy(projectId);
   const merged: StrategyDoc = {
     ...current,
     ...updated,
+    projectId,
     updatedAt: new Date().toISOString(),
   };
 
   const db = getFirestore();
   if (db) {
     try {
-      await db.collection('settings').doc('strategy').set(merged, { merge: true });
+      await db.collection('settings').doc(`strategy-${projectId}`).set(merged, { merge: true });
       return merged;
     } catch (e) {
       console.warn('Firestore write failed for strategy, using local fallback', e);
@@ -125,30 +229,44 @@ export async function updateStrategy(updated: Partial<StrategyDoc>): Promise<Str
   }
 
   const store = getLocalStore();
-  store.strategy = merged;
+  if (!store.strategies) store.strategies = {};
+  store.strategies[projectId] = merged;
   saveLocalStore(store);
   return merged;
 }
 
-// --- Open Items Store ---
-export async function getOpenItems(): Promise<OpenItem[]> {
+// ==========================================
+// Open Items Store
+// ==========================================
+export async function getOpenItems(projectId?: string): Promise<OpenItem[]> {
   const db = getFirestore();
   if (db) {
     try {
-      const snapshot = await db.collection('openItems').orderBy('createdAt', 'desc').get();
+      let query = db.collection('openItems').orderBy('createdAt', 'desc');
+      if (projectId) {
+        query = query.where('projectId', '==', projectId) as any;
+      }
+      const snapshot = await query.get();
       if (!snapshot.empty) {
         return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as OpenItem));
       }
-      // Seed if empty
-      for (const item of initialOpenItems) {
-        await db.collection('openItems').doc(item.id).set(item);
+      if (!projectId || projectId === 'proj-mohawk') {
+        for (const item of initialOpenItems) {
+          await db.collection('openItems').doc(item.id).set(item);
+        }
+        return initialOpenItems;
       }
-      return initialOpenItems;
+      return [];
     } catch (e) {
       console.warn('Firestore read failed for openItems, using local fallback', e);
     }
   }
-  return getLocalStore().openItems;
+
+  const allItems = getLocalStore().openItems;
+  if (projectId) {
+    return allItems.filter(i => (i.projectId || 'proj-mohawk') === projectId);
+  }
+  return allItems;
 }
 
 export async function createOpenItem(item: Omit<OpenItem, 'id' | 'createdAt' | 'updatedAt'>): Promise<OpenItem> {
@@ -156,6 +274,7 @@ export async function createOpenItem(item: Omit<OpenItem, 'id' | 'createdAt' | '
   const now = new Date().toISOString();
   const newItem: OpenItem = {
     ...item,
+    projectId: item.projectId || 'proj-mohawk',
     id,
     createdAt: now,
     updatedAt: now,
@@ -222,35 +341,50 @@ export async function deleteOpenItem(id: string): Promise<boolean> {
   return true;
 }
 
-// --- ADRs Store ---
-export async function getADRs(): Promise<ADR[]> {
+// ==========================================
+// ADRs Store
+// ==========================================
+export async function getADRs(projectId?: string): Promise<ADR[]> {
   const db = getFirestore();
   if (db) {
     try {
-      const snapshot = await db.collection('adrs').orderBy('number', 'desc').get();
+      let query = db.collection('adrs').orderBy('number', 'desc');
+      if (projectId) {
+        query = query.where('projectId', '==', projectId) as any;
+      }
+      const snapshot = await query.get();
       if (!snapshot.empty) {
         return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ADR));
       }
-      // Seed
-      for (const adr of initialADRs) {
-        await db.collection('adrs').doc(adr.id).set(adr);
+      if (!projectId || projectId === 'proj-mohawk') {
+        for (const adr of initialADRs) {
+          await db.collection('adrs').doc(adr.id).set(adr);
+        }
+        return initialADRs;
       }
-      return initialADRs;
+      return [];
     } catch (e) {
       console.warn('Firestore read failed for ADRs, using fallback', e);
     }
   }
-  return getLocalStore().adrs;
+
+  const allADRs = getLocalStore().adrs;
+  if (projectId) {
+    return allADRs.filter(a => (a.projectId || 'proj-mohawk') === projectId);
+  }
+  return allADRs;
 }
 
 export async function createADR(adr: Omit<ADR, 'id' | 'number' | 'createdAt' | 'updatedAt'>): Promise<ADR> {
-  const current = await getADRs();
+  const projectId = adr.projectId || 'proj-mohawk';
+  const current = await getADRs(projectId);
   const nextNum = current.length > 0 ? Math.max(...current.map(a => a.number || 0)) + 1 : 1;
-  const id = `adr-${String(nextNum).padStart(3, '0')}`;
+  const id = `adr-${projectId}-${String(nextNum).padStart(3, '0')}`;
   const now = new Date().toISOString();
   const newADR: ADR = {
     ...adr,
     id,
+    projectId,
     number: nextNum,
     createdAt: now,
     updatedAt: now,
@@ -301,24 +435,38 @@ export async function updateADR(id: string, updates: Partial<ADR>): Promise<ADR 
   return store.adrs[index];
 }
 
-// --- Deliverables Store ---
-export async function getDeliverables(): Promise<Deliverable[]> {
+// ==========================================
+// Deliverables Store
+// ==========================================
+export async function getDeliverables(projectId?: string): Promise<Deliverable[]> {
   const db = getFirestore();
   if (db) {
     try {
-      const snapshot = await db.collection('deliverables').orderBy('createdAt', 'desc').get();
+      let query = db.collection('deliverables').orderBy('createdAt', 'desc');
+      if (projectId) {
+        query = query.where('projectId', '==', projectId) as any;
+      }
+      const snapshot = await query.get();
       if (!snapshot.empty) {
         return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Deliverable));
       }
-      for (const del of initialDeliverables) {
-        await db.collection('deliverables').doc(del.id).set(del);
+      if (!projectId || projectId === 'proj-mohawk') {
+        for (const del of initialDeliverables) {
+          await db.collection('deliverables').doc(del.id).set(del);
+        }
+        return initialDeliverables;
       }
-      return initialDeliverables;
+      return [];
     } catch (e) {
       console.warn('Firestore read failed for deliverables, using fallback', e);
     }
   }
-  return getLocalStore().deliverables;
+
+  const allDel = getLocalStore().deliverables;
+  if (projectId) {
+    return allDel.filter(d => (d.projectId || 'proj-mohawk') === projectId);
+  }
+  return allDel;
 }
 
 export async function createDeliverable(del: Omit<Deliverable, 'id' | 'createdAt' | 'updatedAt'>): Promise<Deliverable> {
@@ -326,6 +474,7 @@ export async function createDeliverable(del: Omit<Deliverable, 'id' | 'createdAt
   const now = new Date().toISOString();
   const newDel: Deliverable = {
     ...del,
+    projectId: del.projectId || 'proj-mohawk',
     id,
     createdAt: now,
     updatedAt: now,
@@ -363,24 +512,38 @@ export async function deleteDeliverable(id: string): Promise<boolean> {
   return true;
 }
 
-// --- Activity Log Store ---
-export async function getActivities(limit = 50): Promise<ActivityEvent[]> {
+// ==========================================
+// Activity Log Store
+// ==========================================
+export async function getActivities(projectId?: string, limit = 50): Promise<ActivityEvent[]> {
   const db = getFirestore();
   if (db) {
     try {
-      const snapshot = await db.collection('activities').orderBy('timestamp', 'desc').limit(limit).get();
+      let query = db.collection('activities').orderBy('timestamp', 'desc');
+      if (projectId) {
+        query = query.where('projectId', '==', projectId) as any;
+      }
+      const snapshot = await query.limit(limit).get();
       if (!snapshot.empty) {
         return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ActivityEvent));
       }
-      for (const act of initialActivities) {
-        await db.collection('activities').doc(act.id).set(act);
+      if (!projectId || projectId === 'proj-mohawk') {
+        for (const act of initialActivities) {
+          await db.collection('activities').doc(act.id).set(act);
+        }
+        return initialActivities;
       }
-      return initialActivities;
+      return [];
     } catch (e) {
       console.warn('Firestore read failed for activities, using fallback', e);
     }
   }
-  return getLocalStore().activities.slice(0, limit);
+
+  const allActs = getLocalStore().activities;
+  const filtered = projectId
+    ? allActs.filter(a => (a.projectId || 'proj-mohawk') === projectId)
+    : allActs;
+  return filtered.slice(0, limit);
 }
 
 export async function logActivity(event: Omit<ActivityEvent, 'id' | 'timestamp'>): Promise<ActivityEvent> {
@@ -388,6 +551,7 @@ export async function logActivity(event: Omit<ActivityEvent, 'id' | 'timestamp'>
   const now = new Date().toISOString();
   const newEvent: ActivityEvent = {
     ...event,
+    projectId: event.projectId || 'proj-mohawk',
     id,
     timestamp: now,
   };

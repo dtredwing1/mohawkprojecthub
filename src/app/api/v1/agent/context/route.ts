@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { validateAgentApiKey } from '@/lib/agent-auth';
-import { getStrategy, getADRs, getOpenItems, getDeliverables } from '@/lib/storage';
+import { getStrategy, getADRs, getOpenItems, getDeliverables, getProject, getProjects } from '@/lib/storage';
 
 export async function GET(req: NextRequest) {
   const auth = validateAgentApiKey(req);
@@ -8,15 +8,24 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: auth.error }, { status: 401 });
   }
 
-  const [strategy, adrs, openItems, deliverables] = await Promise.all([
-    getStrategy(),
-    getADRs(),
-    getOpenItems(),
-    getDeliverables(),
+  const projectId =
+    req.headers.get('x-project-id') ||
+    req.nextUrl.searchParams.get('projectId') ||
+    'proj-mohawk';
+
+  const [project, strategy, adrs, openItems, deliverables, allProjects] = await Promise.all([
+    getProject(projectId),
+    getStrategy(projectId),
+    getADRs(projectId),
+    getOpenItems(projectId),
+    getDeliverables(projectId),
+    getProjects(),
   ]);
 
   return NextResponse.json({
-    project: {
+    activeProject: project || { id: projectId, name: 'Project Hub' },
+    availableProjects: allProjects.map(p => ({ id: p.id, name: p.name, key: p.key })),
+    projectContext: {
       mission: strategy.mission,
       vision: strategy.vision,
       pillars: strategy.pillars,

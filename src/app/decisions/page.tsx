@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { ADR, ADRStatus, ADRSubsystem } from '@/lib/types';
 import { useModals } from '@/components/ModalContext';
+import { useProject } from '@/components/ProjectContext';
 import {
   FileCode2,
   Plus,
@@ -21,6 +22,7 @@ import {
 
 export default function DecisionsPage() {
   const { openModal } = useModals();
+  const { activeProject, activeProjectId } = useProject();
   const [adrs, setAdrs] = useState<ADR[]>([]);
   const [loading, setLoading] = useState(true);
   const [subsystemFilter, setSubsystemFilter] = useState<string>('all');
@@ -30,12 +32,14 @@ export default function DecisionsPage() {
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
   const fetchADRs = () => {
-    fetch('/api/decisions')
+    setLoading(true);
+    const pid = activeProjectId || 'proj-mohawk';
+    fetch(`/api/decisions?projectId=${pid}`)
       .then((res) => res.json())
       .then((data) => {
-        setAdrs(data);
-        if (data.length > 0) {
-          setExpandedId(data[0].id); // Expand first by default
+        setAdrs(data || []);
+        if (data && data.length > 0) {
+          setExpandedId(data[0].id);
         }
         setLoading(false);
       })
@@ -47,7 +51,7 @@ export default function DecisionsPage() {
 
   useEffect(() => {
     fetchADRs();
-  }, []);
+  }, [activeProjectId]);
 
   const handleStatusChange = async (adr: ADR, newStatus: ADRStatus) => {
     setUpdatingId(adr.id);

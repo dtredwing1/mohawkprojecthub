@@ -1,7 +1,8 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getActivities } from '@/lib/storage';
 
-export async function GET() {
-  const activities = await getActivities(60);
+export async function GET(req: NextRequest) {
+  const projectId = req.nextUrl.searchParams.get('projectId') || undefined;
+  const activities = await getActivities(projectId, 60);
   return NextResponse.json(activities);
 }

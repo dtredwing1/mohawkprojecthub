@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { StrategyDoc } from '@/lib/types';
+import { useProject } from '@/components/ProjectContext';
 import {
   Compass,
   Sparkles,
@@ -16,13 +17,16 @@ import {
 } from 'lucide-react';
 
 export default function StrategyPage() {
+  const { activeProject, activeProjectId } = useProject();
   const [strategy, setStrategy] = useState<StrategyDoc | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
 
   useEffect(() => {
-    fetch('/api/strategy')
+    setLoading(true);
+    const pid = activeProjectId || 'proj-mohawk';
+    fetch(`/api/strategy?projectId=${pid}`)
       .then((res) => res.json())
       .then((data) => {
         setStrategy(data);
@@ -32,17 +36,18 @@ export default function StrategyPage() {
         console.error(err);
         setLoading(false);
       });
-  }, []);
+  }, [activeProjectId]);
 
   const handleSave = async () => {
     if (!strategy) return;
     setSaving(true);
     setSavedSuccess(false);
     try {
-      const res = await fetch('/api/strategy', {
+      const pid = activeProjectId || 'proj-mohawk';
+      const res = await fetch(`/api/strategy?projectId=${pid}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(strategy),
+        body: JSON.stringify({ ...strategy, projectId: pid }),
       });
       if (res.ok) {
         setSavedSuccess(true);

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { OpenItem, ItemStatus, Priority } from '@/lib/types';
 import { useModals } from '@/components/ModalContext';
+import { useProject } from '@/components/ProjectContext';
 import {
   CheckSquare,
   Plus,
@@ -21,6 +22,7 @@ import {
 
 export default function OpenItemsPage() {
   const { openModal } = useModals();
+  const { activeProject, activeProjectId } = useProject();
   const [items, setItems] = useState<OpenItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -29,10 +31,12 @@ export default function OpenItemsPage() {
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
   const fetchItems = () => {
-    fetch('/api/items')
+    setLoading(true);
+    const pid = activeProjectId || 'proj-mohawk';
+    fetch(`/api/items?projectId=${pid}`)
       .then((res) => res.json())
       .then((data) => {
-        setItems(data);
+        setItems(data || []);
         setLoading(false);
       })
       .catch((err) => {
@@ -43,7 +47,7 @@ export default function OpenItemsPage() {
 
   useEffect(() => {
     fetchItems();
-  }, []);
+  }, [activeProjectId]);
 
   const handleStatusToggle = async (item: OpenItem) => {
     let nextStatus: ItemStatus = 'in-progress';

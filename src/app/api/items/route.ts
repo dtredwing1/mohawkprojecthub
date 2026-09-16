@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getOpenItems, createOpenItem, logActivity } from '@/lib/storage';
 import { sendSlackNotification } from '@/lib/slack';
 
-export async function GET() {
-  const items = await getOpenItems();
+export async function GET(req: NextRequest) {
+  const projectId = req.nextUrl.searchParams.get('projectId') || undefined;
+  const items = await getOpenItems(projectId);
   return NextResponse.json(items);
 }
 
@@ -13,6 +14,7 @@ export async function POST(req: NextRequest) {
     const item = await createOpenItem(body);
 
     await logActivity({
+      projectId: item.projectId,
       actor: { name: body.owner || 'Team Member', type: 'user' },
       action: 'Created Action Item',
       details: `Created item: "${item.title}" [${item.priority}]`,

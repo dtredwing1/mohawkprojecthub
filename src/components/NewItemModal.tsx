@@ -2,11 +2,13 @@
 
 import { useState } from 'react';
 import { useModals } from './ModalContext';
+import { useProject } from './ProjectContext';
 import { X, CheckSquare, Loader2 } from 'lucide-react';
 import { Priority } from '@/lib/types';
 
 export function NewItemModal({ onCreated }: { onCreated?: () => void }) {
   const { activeModal, closeModal } = useModals();
+  const { activeProjectId } = useProject();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState<Priority>('medium');
@@ -27,6 +29,7 @@ export function NewItemModal({ onCreated }: { onCreated?: () => void }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          projectId: activeProjectId || 'proj-mohawk',
           title,
           description,
           status: 'todo',

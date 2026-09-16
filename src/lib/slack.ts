@@ -1,7 +1,7 @@
 export interface SlackMessagePayload {
   title: string;
   message: string;
-  category?: 'item' | 'adr' | 'deliverable' | 'strategy' | 'agent';
+  category?: 'item' | 'adr' | 'deliverable' | 'strategy' | 'agent' | 'system';
   url?: string;
   fields?: { label: string; value: string }[];
   actorName?: string;
