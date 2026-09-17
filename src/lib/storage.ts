@@ -115,6 +115,7 @@ function getFirestore(): Firestore | null {
     const projectId = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCP_PROJECT_ID;
     firestoreClient = new Firestore({
       projectId: projectId || undefined,
+      ignoreUndefinedProperties: true,
     });
   }
   return firestoreClient;
