@@ -7,11 +7,25 @@ import {
   getCollaboratorInvites,
 } from '@/lib/storage';
 
+const rawClientId = (process.env.GOOGLE_CLIENT_ID || '').trim();
+const rawClientSecret = (process.env.GOOGLE_CLIENT_SECRET || '').trim();
+
+console.log('[Auth Diagnostics]', {
+  hasClientId: Boolean(rawClientId),
+  clientIdLength: rawClientId.length,
+  clientIdPrefix: rawClientId.slice(0, 12),
+  clientIdSuffix: rawClientId.slice(-15),
+  hasClientSecret: Boolean(rawClientSecret),
+  clientSecretLength: rawClientSecret.length,
+  clientSecretPrefix: rawClientSecret.slice(0, 8),
+  clientSecretSuffix: rawClientSecret.slice(-4),
+});
+
 export const authOptions: NextAuthOptions = {
   providers: [
     GoogleProvider({
-      clientId: (process.env.GOOGLE_CLIENT_ID || '').trim(),
-      clientSecret: (process.env.GOOGLE_CLIENT_SECRET || '').trim(),
+      clientId: rawClientId,
+      clientSecret: rawClientSecret,
       authorization: {
         params: {
           prompt: 'select_account',
@@ -28,6 +42,12 @@ export const authOptions: NextAuthOptions = {
   logger: {
     error(code, metadata) {
       console.error(`[NextAuth Error] ${code}:`, metadata);
+      console.error('[Auth Credentials State]', {
+        clientIdLength: rawClientId.length,
+        clientIdSuffix: rawClientId.slice(-15),
+        clientSecretLength: rawClientSecret.length,
+        clientSecretSuffix: rawClientSecret.slice(-4),
+      });
     },
     warn(code) {
       console.warn(`[NextAuth Warn] ${code}`);
