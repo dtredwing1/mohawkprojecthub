@@ -39,9 +39,23 @@ Every project in the Hub has its own isolated Strategy Canvas, Open Items Backlo
   * Seed a clean **Strategy Canvas** ready for you to define mission, vision, and milestones.
   * Switch your active view to the new workspace immediately.
 
-### Step 4: Switching Between Projects
-* Click the **Project Switcher** at the top of the left sidebar at any time.
-* Select any project to instantly jump between workspaces without reloading the page. All previous projects and their historical records are retained.
+### Step 4: Switching Between Projects & Setting Defaults
+* Click the **Project Switcher** at the top of the left sidebar at any time to jump between workspaces.
+* **Personal Default**: Click the ⭐ star icon next to any workspace in the dropdown (or in Settings) to set it as your personal default workspace whenever you log in.
+* **Global Default (Admin)**: In Settings, admins can click **"Make Global Default"** on any project to set it as the landing workspace for all new collaborators. Promoting any workspace to default unlocks the original starter template (`Mohawk Project Hub`) so it can be renamed or deleted cleanly.
+
+---
+
+## 🔒 Private Google Authentication & Collaborator Access (RBAC)
+
+The Project Collaboration Hub is a private, invite-only cockpit:
+* **Google Account Sign-In**: Visitors authenticate securely with their Google account.
+* **Invited Collaborators Only**: Only email addresses explicitly added by the Administrator can access the workspace. Uninvited users receive an "Access Restricted" gate.
+* **Role-Based Permissions**:
+  * **Root Administrator (`admin`)**: Manages workspaces, invites and assigns collaborators, configures Slack webhooks, and rotates API keys.
+  * **Team Member (`member`)**: Contributes to assigned workspaces (edits backlogs, ADRs, deliverables, and strategy). Sensitive infrastructure configurations and API keys are automatically hidden and masked.
+  * **Viewer (`viewer`)**: Read-only access to assigned workspaces.
+* **Workspace Scoping**: Administrators can choose which specific workspaces each collaborator can access. Teammates only see the projects they have been assigned.
 
 ---
 
